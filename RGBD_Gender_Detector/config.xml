@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<data>
+  <training_data>"F:\Documents\IIIT-D\Monsoon14\Image Analysis CSE540\CourseProject\RGBD Images\fold1\training"</training_data>
+  <testing_data>"F:\Documents\IIIT-D\Monsoon14\Image Analysis CSE540\CourseProject\RGBD Images\fold1\testing"</testing_data>
+  <output>"F:\Documents\IIIT-D\Monsoon14\Image Analysis CSE540\CourseProject\RGBD Images\output"</output>
+</data>
