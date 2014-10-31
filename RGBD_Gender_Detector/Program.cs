@@ -48,11 +48,45 @@ namespace RGBD_Gender_Detector
             return featureValue;
         }
 
+        int max(int a, int b)
+        {
+            if (a >= b)
+                return a;
+            else
+                return b;
+        }
+
+        int min(int a, int b)
+        {
+            if (a < b)
+                return a;
+            else
+                return b;
+        }
+
+        int[] getDepthPixelGLBP(int[,] mask)
+        {
+            int[,] lbpMask = new int[3, 3];
+            int i = 0, j = 0;
+            int[] lbpIndexI = new int[] { 2, 2, 2, 1 };
+            int[] lbpIndexJ = new int[] { 2, 1, 0, 0 };
+            int[] glbpFeature = new int[4];
+            while (i < lbpIndexI.Length)
+            {
+                glbpFeature[i] = max(min(mask[lbpIndexI[i], lbpIndexJ[j]] - mask[1, 1], 7), -8);
+                i++;
+                j++;
+            }
+
+            return glbpFeature;
+        }
+
         int[,] getGrayScaleImageLBP(Image<Gray, byte> grayScaleImage)
         {
             int[,] mask = new int[3, 3];
 
             int[,] grayScaleLBP = new int[grayScaleImage.Width, grayScaleImage.Height];
+
 
             for (int i = 0; i < grayScaleImage.Height; i++)
             {
@@ -102,9 +136,62 @@ namespace RGBD_Gender_Detector
 
         }
 
+
+        List<int[,]> getDepthImageGLBP(Image<Gray, byte> depthImage)
+        {
+            int[,] mask = new int[3, 3];
+
+            List<int[,]> depthGLBPList = new List<int[,]>();
+            int[,] depthGLBP1 = new int[depthImage.Width, depthImage.Height];
+            int[,] depthGLBP2 = new int[depthImage.Width, depthImage.Height];
+            int[,] depthGLBP3 = new int[depthImage.Width, depthImage.Height];
+            int[,] depthGLBP4 = new int[depthImage.Width, depthImage.Height];
+            int[] pixelGlbp = new int[4];
+
+            for (int i = 0; i < depthImage.Height; i++)
+            {
+                for (int j = 0; j < depthImage.Width; j++)
+                {
+                    if (j - 1 < 0) mask[0, 0] = 0;
+                    else
+                        mask[1, 0] = depthImage.Data[j - 1, i, 0];
+
+                    mask[1, 1] = depthImage.Data[j, i, 0];
+
+                    if (i + 1 > depthImage.Height || j - 1 < 0) mask[0, 0] = 0;
+                    else
+                        mask[2, 0] = depthImage.Data[j - 1, i + 1, 0];
+
+                    if (i + 1 > depthImage.Height) mask[0, 0] = 0;
+                    else
+                        mask[2, 1] = depthImage.Data[j, i + 1, 0];
+
+                    if (i + 1 > depthImage.Height || j + 1 > depthImage.Width) mask[0, 0] = 0;
+                    else
+                        mask[2, 2] = depthImage.Data[j + 1, i + 1, 0];
+
+
+                    pixelGlbp = getDepthPixelGLBP(mask);
+
+                    depthGLBP1[j, i] = pixelGlbp[0];
+                    depthGLBP2[j, i] = pixelGlbp[1];
+                    depthGLBP3[j, i] = pixelGlbp[2];
+                    depthGLBP4[j, i] = pixelGlbp[3];
+
+                }
+            }
+            depthGLBPList.Add(depthGLBP1);
+            depthGLBPList.Add(depthGLBP2);
+            depthGLBPList.Add(depthGLBP3);
+            depthGLBPList.Add(depthGLBP4);
+
+            return depthGLBPList;
+
+        }
+
         int[,] getUniformLBP(int[,] lbpFeature, int height, int width)
         {
-            int[,] ulbpFeature = new int[width,height];
+            int[,] ulbpFeature = new int[width, height];
 
             int[] lookUp = new int[] { 0, 1, 2, 3, 4, 58, 5, 6, 7, 58, 58, 58, 8, 58, 9, 10, 11, 58, 58, 58, 
                 58, 58, 58, 58, 12, 58, 58, 58, 13, 58, 14, 15, 16, 58, 58, 58, 58, 58, 58, 58, 58, 58, 58, 
@@ -148,44 +235,55 @@ namespace RGBD_Gender_Detector
             return pixelDataArray;
         }
 
-        List<long[]> getGrayScaleImageU2LBPFeatureVector(String grayScaleImagePath)
+
+        long[] getGLBPHistogramVector(int[,] depthGlbp, int height, int width)
         {
-            Image<Gray, byte> grayScaleImage = new Image<Gray, Byte>(grayScaleImagePath);
-            int subImageHeight = grayScaleImage.Height / 8;
-            int subImageWidth = grayScaleImage.Width / 8;
-            Image<Gray, byte> uLBPImage = grayScaleImage = new Image<Gray, Byte>(grayScaleImagePath);
-            List<long[]> uLBPfeatureVector = new List<long[]>();
-            List<long[]> gLBPfeatureVector = new List<long[]>();
-            int[,] subImageVector;
-            Image<Gray, Byte> segment, segmentHolder;
+            long[] pixelDataArray = new long[16];
 
-
-            int i_, j_ ,i ,j;
-            for (j = 0, j_ = 0; j < grayScaleImage.Height - subImageHeight; j += subImageHeight, j_++)
+            for (int i = 0; i < height; i++)
             {
-                for (i = 0, i_ = 0; i < grayScaleImage.Width - subImageHeight; i += subImageWidth, i_++)
+                for (int j = 0; j < width; j++)
                 {
-                    segmentHolder = grayScaleImage.Clone();
-                    segmentHolder.ROI = new Rectangle(i, j, subImageWidth, subImageHeight);
-                    segment = segmentHolder.Clone();
-                    subImageVector = getUniformLBP(getGrayScaleImageLBP(segment), segment.Height, segment.Width);
-                    uLBPfeatureVector.Add(getU2LBPHistogramVector(subImageVector, segment.Height, segment.Width));
-                    
+                    pixelDataArray[depthGlbp[j, i] + 8]++;
+
                 }
             }
 
-            return uLBPfeatureVector;
+            return pixelDataArray;
         }
 
-
-        List<long[]> getDepthImageGLBPFeatureVector(String depthImagePath)
+        long[] getConcatenatedFeatureVector(List<long[]> featureVectorList)
         {
-            Image<Gray, byte> grayScaleImage = new Image<Gray, Byte>(depthImagePath);
-            int subImageHeight = grayScaleImage.Height / 8;
-            int subImageWidth = grayScaleImage.Width / 8;
-            Image<Gray, byte> uLBPImage = grayScaleImage = new Image<Gray, Byte>(depthImagePath);
+            long[] concatenatedVector;
+            int vectorSize = 0, j_ = 0;
+            for (int i = 0; i < featureVectorList.Count; i++)
+            {
+                vectorSize += featureVectorList[i].Length;
+            }
+
+            concatenatedVector = new long[vectorSize];
+
+            for (int i = 0; i < featureVectorList.Count; i++)
+            {
+                for (int j = 0; j < featureVectorList[i].Length; j++, j_++)
+                {
+                    concatenatedVector[j_] = featureVectorList[i][j];
+                }
+
+            }
+
+
+            return concatenatedVector;
+
+        }
+
+        List<long[]> getGrayScaleImageU2LBPFeatureVector(String grayScaleImagePath)
+        {
+            Image<Gray, byte> grayScaleImage = new Image<Gray, Byte>(grayScaleImagePath);
+            int subImageHeight = grayScaleImage.Height / 1 - 1;
+            int subImageWidth = grayScaleImage.Width / 1 - 1;
+            Image<Gray, byte> uLBPImage = grayScaleImage;
             List<long[]> uLBPfeatureVector = new List<long[]>();
-            List<long[]> gLBPfeatureVector = new List<long[]>();
             int[,] subImageVector;
             Image<Gray, Byte> segment, segmentHolder;
 
@@ -208,6 +306,46 @@ namespace RGBD_Gender_Detector
         }
 
 
+        List<long[]> getDepthImageGLBPFeatureVector(String depthImagePath)
+        {
+            Image<Gray, byte> depthImage = new Image<Gray, Byte>(depthImagePath);
+            int subImageHeight = depthImage.Height / 1 - 1;
+            int subImageWidth = depthImage.Width / 1 - 1;
+            Image<Gray, byte> uLBPImage = depthImage;
+            List<long[]> gLBPConcatenatedfeatureVector = new List<long[]>();
+            List<long[]> gLBPfeatureOrientationVectorList = null;
+            List<int[,]> depthGLBPList = new List<int[,]>();
+            Image<Gray, Byte> segment, segmentHolder;
+
+
+            int i_, j_, i, j;
+            for (j = 0, j_ = 0; j < depthImage.Height - subImageHeight; j += subImageHeight, j_++)
+            {
+                for (i = 0, i_ = 0; i < depthImage.Width - subImageHeight; i += subImageWidth, i_++)
+                {
+                    segmentHolder = depthImage.Clone();
+                    segmentHolder.ROI = new Rectangle(i, j, subImageWidth, subImageHeight);
+                    segment = segmentHolder.Clone();
+                    depthGLBPList = getDepthImageGLBP(segment);
+                    gLBPfeatureOrientationVectorList = new List<long[]>();
+                    for (int k = 0; k < 4; k++)
+                        gLBPfeatureOrientationVectorList.Add(getGLBPHistogramVector(depthGLBPList[k], segment.Height, segment.Width));
+
+                    gLBPConcatenatedfeatureVector.Add(getConcatenatedFeatureVector(gLBPfeatureOrientationVectorList));
+                    gLBPfeatureOrientationVectorList = null;
+
+                }
+            }
+
+            return gLBPConcatenatedfeatureVector;
+        }
+
+        private int[,] getGLBP(int[,] p1, int p2, int p3)
+        {
+            throw new NotImplementedException();
+        }
+
+
         static void Main(string[] args)
         {
             Program program = new Program();
@@ -219,32 +357,74 @@ namespace RGBD_Gender_Detector
             Console.WriteLine(program.readXmlNode(configXML, testingDataNode));
             int j = 0;
             String[] depthImageFilePaths, BGRImageFilePaths;
-            for (int i = 1; i <= 2; i++)
+            System.IO.StreamWriter file = new System.IO.StreamWriter("d:\\dataset.txt");
+            try
             {
-                imagePath = program.readXmlNode(configXML, trainingDataNode) + "\\" + i;
-                depthImageDir = imagePath + "\\Depth\\";
-                BGRImagePath = imagePath + "\\RGB\\";
-                depthImageFilePaths = Directory.GetFiles(@depthImageDir);
-                BGRImageFilePaths = Directory.GetFiles(@BGRImagePath);
-                j = 0;
-                while (j < depthImageFilePaths.Length)
+                for (int i = 1; i <= 20; i++)
                 {
-                    Console.WriteLine(depthImageFilePaths[j]);
-                    Console.WriteLine(BGRImageFilePaths[j]);
-                    program.getGrayScaleImageU2LBPFeatureVector(BGRImageFilePaths[j]);
-                    program.getDepthImageGLBPFeatureVector(depthImageFilePaths[j]);
-                    Console.WriteLine();
-                    j++;
-                }
-                try
-                {
+                    imagePath = program.readXmlNode(configXML, trainingDataNode) + "\\" + i;
+                    depthImageDir = imagePath + "\\Depth\\";
+                    BGRImagePath = imagePath + "\\RGB\\";
+                    depthImageFilePaths = Directory.GetFiles(@depthImageDir);
+                    BGRImageFilePaths = Directory.GetFiles(@BGRImagePath);
+                    List<long[]> u2LBPfvList = new List<long[]>();
+                    List<long[]> gLBPfvList = new List<long[]>();
+                    List<long[]> combinedFVlist = null;
+                    
+                    
+
+                    j = 0;
+
+                    while (j < depthImageFilePaths.Length)
+                    {
+                        Console.WriteLine(depthImageFilePaths[j]);
+                        Console.WriteLine(BGRImageFilePaths[j]);
+                        u2LBPfvList = program.getGrayScaleImageU2LBPFeatureVector(BGRImageFilePaths[j]);
+                        gLBPfvList = program.getDepthImageGLBPFeatureVector(depthImageFilePaths[j]);
+
+                        string genderCode = System.IO.File.ReadAllText(@imagePath + "\\gender.txt");
+
+                        
+                        String featureVector = genderCode;
+
+                        //Here range of k depends on the number of parts of the image that has been made
+                        // so for 8 x 8 parts of image k value ranges from 0 to 63
+                        
+                        combinedFVlist = new List<long[]>();
+
+                        for (int k = 0; k < 1; k++)
+                        {
+                            combinedFVlist.Add(program.getConcatenatedFeatureVector(new List<long[]> { u2LBPfvList[k], gLBPfvList[k] }));
+                        }
+                        long[] ImageFeatureVector = program.getConcatenatedFeatureVector(combinedFVlist);
+
+                        combinedFVlist = null;
+
+                        for (int l = 0; l < ImageFeatureVector.Length; l++)
+                        {
+                            int index = l + 1;
+                            featureVector += " " + index + ":" + ImageFeatureVector[l];
+                        }
+
+
+                        file.WriteLine(featureVector);
+                        file.WriteLine();
+
+                        featureVector = null;
+
+                        Console.WriteLine();
+                        j++;
+                    }
+
                     // read from file or write to file
+
                 }
-                finally
-                {
-                    ;
-                    //fileStream.Close();
-                }
+            }
+            finally
+            {
+                file.Close();
+
+                //fileStream.Close();
             }
 
         }
